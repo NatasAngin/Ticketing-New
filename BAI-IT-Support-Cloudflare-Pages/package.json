@@ -1,0 +1,12 @@
+{
+  "name": "bai-it-support-kpi",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public --project-name bai-it-support-kpi"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
+  }
+}
