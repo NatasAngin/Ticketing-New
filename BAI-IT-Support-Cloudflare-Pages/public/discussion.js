@@ -5,7 +5,12 @@ function discussionDatabase(){
  if(!discussionDbPromise)discussionDbPromise=new Promise((resolve,reject)=>{const request=indexedDB.open('bai-ticket-discussions-v1',1);request.onupgradeneeded=()=>{const store=request.result.createObjectStore('messages',{keyPath:'id'});store.createIndex('ticketId','ticketId',{unique:false})};request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();discussionDbPromise=null};resolve(db)};request.onerror=()=>{discussionDbPromise=null;reject(Error('Penyimpanan diskusi tidak dapat dibuka. Izinkan penyimpanan browser dan coba kembali.'))};request.onblocked=()=>{discussionDbPromise=null;reject(Error('Penyimpanan diskusi sedang dipakai versi lain. Tutup tab dashboard lainnya dan coba kembali.'))}});
  return discussionDbPromise;
 }
-async function getDiscussionMessages(ticketId){discussionAccess(ticketId);const db=await discussionDatabase();discussionAccess(ticketId);return new Promise((resolve,reject)=>{const tx=db.transaction('messages','readonly'),request=tx.objectStore('messages').index('ticketId').getAll(ticketId);let rows=[];request.onsuccess=()=>{rows=request.result};tx.oncomplete=()=>{try{discussionAccess(ticketId);resolve(rows.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id)))}catch(error){reject(error)}};tx.onerror=tx.onabort=()=>reject(Error('Riwayat diskusi gagal dibaca.'))})}
+async function getLocalDiscussionMessages(ticketId){const db=await discussionDatabase();return new Promise((resolve,reject)=>{const tx=db.transaction('messages','readonly'),request=tx.objectStore('messages').index('ticketId').getAll(ticketId);let rows=[];request.onsuccess=()=>{rows=request.result};tx.oncomplete=()=>resolve(rows);tx.onerror=tx.onabort=()=>reject(Error('Lampiran lokal gagal dibaca.'))})}
+async function getDiscussionMessages(ticketId){
+ discussionAccess(ticketId);const response=await fetch('/api/tickets/'+encodeURIComponent(ticketId)+'/comments',{credentials:'same-origin',cache:'no-store'});let data;try{data=await response.json()}catch{throw Error('Respons server diskusi tidak valid.')}if(!response.ok||data.ok===false)throw Error(data.error||'Riwayat diskusi gagal dimuat.');
+ const localRows=await getLocalDiscussionMessages(ticketId),localMap=new Map(localRows.map(m=>[m.id,m])),messages=(data.messages||[]).map(m=>({...m,attachments:localMap.get(m.id)?.attachments||m.attachments||[]}));
+ return messages.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+}
 function writeDiscussionMessage(db,message,actorId){return new Promise((resolve,reject)=>{
  try{discussionAccess(message.ticketId);if(activeUser.id!==actorId)throw Error('Sesi akun berubah. Buka kembali diskusi.');const tx=db.transaction('messages','readwrite');tx.objectStore('messages').add(message);tx.oncomplete=()=>resolve(message);tx.onerror=tx.onabort=()=>reject(Error('Pesan atau lampiran gagal disimpan. Periksa ruang penyimpanan browser.'))}catch(error){reject(error)}
 })}
@@ -17,12 +22,15 @@ async function validateChatFile(file){
  const safeName=file.name.replace(/[\\/\x00-\x1f]/g,'_').slice(0,180);return{id:crypto.randomUUID(),name:safeName,size:file.size,type:pdf?'application/pdf':'image/jpeg',blob:file.slice(0,file.size,pdf?'application/pdf':'image/jpeg')};
 }
 async function sendDiscussionMessage(ticketId,text,files=[],replyTo=null){
- discussionAccess(ticketId);const actorId=activeUser.id,actor=accounts.find(a=>a.id===actorId),body=String(text||'').trim();
+ discussionAccess(ticketId);const actorId=activeUser.id,body=String(text||'').trim();
  if(body.length>5000)throw Error('Pesan maksimal 5.000 karakter.');if(!body&&!files.length)throw Error('Isi pesan atau pilih lampiran terlebih dahulu.');if(files.length>3)throw Error('Maksimal 3 file per pesan.');if(files.reduce((sum,f)=>sum+f.size,0)>20*1024*1024)throw Error('Total lampiran maksimal 20 MB per pesan.');
  const attachments=[];for(const file of files)attachments.push(await validateChatFile(file));
  if(replyTo){const history=await getDiscussionMessages(ticketId);if(!history.some(m=>m.id===replyTo))throw Error('Pesan yang dibalas tidak ditemukan pada tiket ini.')}
- const db=await discussionDatabase();discussionAccess(ticketId);if(!activeUser||activeUser.id!==actorId||!accountEnabled(actor))throw Error('Sesi sudah berakhir atau berubah.');
- const message={id:crypto.randomUUID(),ticketId,authorId:actorId,authorName:actor.name,authorRole:actor.role,text:body,replyTo:replyTo||null,attachments,createdAt:new Date().toISOString()};return writeDiscussionMessage(db,message,actorId);
+ if(!activeUser||activeUser.id!==actorId)throw Error('Sesi sudah berakhir atau berubah.');
+ const id=crypto.randomUUID(),response=await fetch('/api/tickets/'+encodeURIComponent(ticketId)+'/comments',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({id,text:body||'[Lampiran]',replyTo:replyTo||null})});let result;try{result=await response.json()}catch{throw Error('Respons server diskusi tidak valid.')}if(!response.ok||result.ok===false)throw Error(result.error||'Pesan gagal disimpan ke server.');
+ const message={...result.message,attachments};
+ if(attachments.length){const db=await discussionDatabase();await writeDiscussionMessage(db,message,actorId)}
+ return message;
 }
 async function openDiscussion(ticketId){
  try{const t=discussionAccess(ticketId);discussionTicketId=ticketId;discussionReplyId=null;discussionMessages=[];$('#discussion-form').reset();$('#discussion-files').textContent='';$('#discussion-error').textContent='';$('#discussion-reply').classList.add('hidden');$('#discussion-ticket').textContent=t.id+' · '+t.title;$('#discussion-messages').innerHTML='<div class="empty">Memuat riwayat diskusi…</div>';$('#discussion-modal').showModal();await refreshDiscussion(true)}catch(error){$('#discussion-error').textContent=error.message}
@@ -51,9 +59,9 @@ setInterval(()=>{if(discussionTicketId&&!discussionBusy)refreshDiscussion()},100
 let discussionUnread=new Map(),discussionNotificationActor=null,discussionNotificationBusy=false,discussionNotified=new Set();
 function discussionReceipts(actorId){try{const data=JSON.parse(localStorage.getItem('bai-discussion-read-v1:'+actorId)||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?data:{}}catch{return{}}}
 function unreadDiscussionHeads(heads,actorId,seenIds=[]){const seen=new Set(seenIds);return heads.filter(m=>m.authorId!==actorId&&!seen.has(m.id))}
-function getDiscussionHeads(ticketId){
- return discussionDatabase().then(db=>{discussionAccess(ticketId);return new Promise((resolve,reject)=>{const tx=db.transaction('messages','readonly'),request=tx.objectStore('messages').index('ticketId').openCursor(ticketId),heads=[];
- request.onsuccess=()=>{const cursor=request.result;if(cursor){const m=cursor.value;heads.push({id:m.id,authorId:m.authorId,replyTo:m.replyTo||null});cursor.continue()}};tx.oncomplete=()=>{try{discussionAccess(ticketId);resolve(heads)}catch(error){reject(error)}};tx.onerror=tx.onabort=()=>reject(Error('Notifikasi diskusi belum dapat diperiksa.'))})});
+async function getDiscussionHeads(ticketId){
+ discussionAccess(ticketId);const response=await fetch('/api/tickets/'+encodeURIComponent(ticketId)+'/comments',{credentials:'same-origin',cache:'no-store'});let data;try{data=await response.json()}catch{throw Error('Notifikasi diskusi tidak valid.')}if(!response.ok||data.ok===false)throw Error(data.error||'Notifikasi diskusi belum dapat diperiksa.');
+ return (data.messages||[]).map(m=>({id:m.id,authorId:m.authorId,replyTo:m.replyTo||null}));
 }
 function discussionBadge(ticketId){const record=discussionUnread.get(ticketId),count=record?.count||0;return count?'<span class="discussion-unread-badge" title="'+count+' pesan belum dibaca, termasuk '+record.replies+' balasan">'+count+' baru</span>':''}
 function discussionButton(t){return '<button type="button" class="edit discussion-button" data-discussion="'+esc(t.id)+'">Diskusi ↗ '+discussionBadge(t.id)+'</button>'}
