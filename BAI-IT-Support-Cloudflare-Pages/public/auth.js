@@ -58,13 +58,14 @@ async function logout(){
 }
 document.getElementById("logout").onclick=logout;
 document.getElementById("account-logout").onclick=logout;
-function roleOptions(selected){return [["user","User"],["administrator","Administrator"],...(isSuperAdmin()||selected==="superadmin"?[["superadmin","Super Admin"]]:[])].map(([value,label])=>'<option value="'+value+'" '+(selected===value?"selected":"")+'>'+label+"</option>").join("")}
+function roleOptions(selected){return [["user","User"],["administrator","Administrator"],...(isSuperAdmin()&&(!accounts.some(a=>a.role==="superadmin"&&accountEnabled(a))||selected==="superadmin")?[["superadmin","Super Admin"]]:[])].map(([value,label])=>'<option value="'+value+'" '+(selected===value?"selected":"")+'>'+label+"</option>").join("")}
 function configureRoleOptions(select,selected){select.innerHTML=roleOptions(selected);select.value=selected}
 function assertAccountPermission(target,nextRole){
  if(!isAdmin())throw Error("Hanya Administrator atau Super Admin yang dapat mengelola akun.");
  if(target?.role==="superadmin"&&!isSuperAdmin())throw Error("Administrator tidak dapat mengubah akun Super Admin.");
  if(target?.role==="administrator"&&nextRole!=="administrator"&&!isSuperAdmin())throw Error("Hanya Super Admin yang dapat menurunkan role Administrator.");
  if(nextRole==="superadmin"&&!isSuperAdmin())throw Error("Hanya Super Admin yang dapat membuat akun Super Admin.");
+ if(nextRole==="superadmin"&&target?.role!=="superadmin"&&accounts.some(a=>a.role==="superadmin"&&accountEnabled(a)))throw Error("Akun Super Admin tunggal sudah ditetapkan.");
  if(target?.role==="superadmin"&&nextRole!=="superadmin"&&accounts.filter(a=>a.role==="superadmin"&&accountEnabled(a)).length<=1)throw Error("Super Admin terakhir tidak dapat diturunkan atau dihapus.");
 }
 function renderAccounts(){
