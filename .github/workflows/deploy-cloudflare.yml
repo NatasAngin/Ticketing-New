@@ -1,4 +1,4 @@
-name: Deploy BAI IT Support to Cloudflare Workers
+name: Validate BAI IT Support
 
 on:
   push:
@@ -6,18 +6,18 @@ on:
     paths:
       - "BAI-IT-Support-Cloudflare-Pages/**"
       - ".github/workflows/deploy-cloudflare.yml"
+  pull_request:
+    paths:
+      - "BAI-IT-Support-Cloudflare-Pages/**"
+      - ".github/workflows/deploy-cloudflare.yml"
   workflow_dispatch:
-
-concurrency:
-  group: cloudflare-workers-production
-  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Validate, provision D1, migrate and deploy
+  validate:
+    name: Validate application and D1 migrations
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -59,87 +59,6 @@ jobs:
           print(f"All SQL migrations valid; {len(tables)} tables checked.")
           PY
 
-      - name: Check required GitHub secrets
-        shell: bash
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Validate Wrangler configuration template
         run: |
-          set -euo pipefail
-          [[ -n "$CF_API_TOKEN" ]] || { echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"; exit 1; }
-          [[ -n "$CF_ACCOUNT_ID" ]] || { echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
-          echo "Cloudflare credentials are present. Token permissions required: Workers Scripts Edit and D1 Edit."
-
-      - name: Install Wrangler
-        run: npm install --global wrangler@4.156.0
-
-      - name: Find or create Cloudflare D1 database
-        id: d1
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          API="https://api.cloudflare.com/client/v4"
-          DB_NAME="bai-it-support-kpi-db"
-          AUTH=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
-
-          echo "Checking D1 database: $DB_NAME"
-          LIST=$(curl --fail-with-body --silent --show-error "${AUTH[@]}" "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?name=$DB_NAME")
-          DB_ID=$(echo "$LIST" | jq -r --arg name "$DB_NAME" '.result[]? | select(.name == $name) | .uuid' | head -n 1)
-
-          if [[ -z "$DB_ID" || "$DB_ID" == "null" ]]; then
-            echo "D1 database does not exist; creating it now."
-            CREATED=$(curl --fail-with-body --silent --show-error -X POST "${AUTH[@]}" "$API/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database" --data "$(jq -n --arg name "$DB_NAME" '{name:$name}')")
-            DB_ID=$(echo "$CREATED" | jq -r '.result.uuid // empty')
-            if [[ -z "$DB_ID" ]]; then
-              echo "::error::Cloudflare did not return a D1 database ID."
-              echo "$CREATED" | jq .
-              exit 1
-            fi
-            echo "D1 database created."
-          else
-            echo "Existing D1 database found; it will be reused."
-          fi
-
-          echo "database_id=$DB_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Generate deployment config
-        env:
-          D1_DATABASE_ID: ${{ steps.d1.outputs.database_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$D1_DATABASE_ID"
-          sed "s/__D1_DATABASE_ID__/$D1_DATABASE_ID/g" wrangler.worker.jsonc > wrangler.generated.jsonc
-          grep -q "$D1_DATABASE_ID" wrangler.generated.jsonc
-          echo "Worker configuration generated with the D1 binding."
-
-      - name: Apply D1 migrations
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.generated.jsonc --yes
-
-      - name: Deploy Worker and static assets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: wrangler deploy --config wrangler.generated.jsonc
-
-      - name: Verify live Worker and D1 connection
-        shell: bash
-        run: |
-          set -euo pipefail
-          URL="https://bai-it-support.sumarewbarbosa.workers.dev/api/health"
-          echo "Checking $URL"
-          for attempt in {1..10}; do
-            RESPONSE=$(curl --silent --show-error "$URL" || true)
-            if echo "$RESPONSE" | jq -e '.ok == true and .worker == true and .database == true' >/dev/null 2>&1; then
-              echo "$RESPONSE" | jq .
-              exit 0
-            fi
-            echo "Health check attempt $attempt/10 did not pass: $RESPONSE"
-            sleep 5
-          done
-          echo "::error::Deployment completed but the live Worker/D1 health check failed."
-          exit 1
+          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.worker.jsonc','utf8'); if(!s.includes('__D1_DATABASE_ID__')) process.exit(1); JSON.parse(s); console.log('Worker configuration template is valid; replace the D1 ID in Cloudflare setup before deployment.')"
