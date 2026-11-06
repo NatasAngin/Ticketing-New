@@ -9,8 +9,8 @@ function accountEnabled(a){return !!a&&a.active!==false}
 function sessionEnabled(){return !!activeUser}
 function roleLabel(role){return role==="superadmin"?"Super Admin":role==="administrator"?"Administrator":"User"}
 async function loadAccounts(user=activeUser){if(!user||!["administrator","superadmin"].includes(user.role)){accounts=[];return}const data=await authApi("/api/accounts");accounts=Array.isArray(data.accounts)?data.accounts:[]}
-function setLoggedIn(user){
- activeUser=user;document.documentElement.classList.remove("auth-locked");document.documentElement.classList.toggle("user-mode",!isAdmin());
+async function setLoggedIn(user){
+ activeUser=user;await loadAppData();document.documentElement.classList.remove("auth-locked");document.documentElement.classList.toggle("user-mode",!isAdmin());
  document.getElementById("session-name").textContent=user.name;document.getElementById("session-role").textContent=roleLabel(user.role);
  view=isAdmin()?"dashboard":"tickets";ticketGroup="active";
  const nav=document.querySelector('[data-view="'+view+'"]');if(nav)nav.click();render();renderAccounts();
@@ -19,7 +19,7 @@ async function bootAuth(){
  const form=document.getElementById("login-form"),button=document.getElementById("login-button");
  button.disabled=true;authError("login-error","");
  try{
-  const me=await authApi("/api/auth/me");await loadAccounts(me.user);setLoggedIn(me.user);return;
+  const me=await authApi("/api/auth/me");await loadAccounts(me.user);await setLoggedIn(me.user);return;
  }catch{}
  try{
   const status=await authApi("/api/auth/status"),setup=!!status.setup_required;
@@ -46,7 +46,7 @@ document.getElementById("login-form").onsubmit=async e=>{
    if(password.length<12)throw Error("Password Super Admin minimal 12 karakter.");
    data=await authApi("/api/auth/setup",{method:"POST",body:JSON.stringify({fullName,username,password})});
   }else data=await authApi("/api/auth/login",{method:"POST",body:JSON.stringify({username,password})});
-  await loadAccounts(data.user);f.reset();setLoggedIn(data.user);
+  await loadAccounts(data.user);f.reset();await setLoggedIn(data.user);
  }catch(error){authError("login-error",error)}finally{button.disabled=false}
 };
 async function logout(){
