@@ -26,6 +26,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate application JavaScript
+        run: |
+          set -euo pipefail
+          node --check public/app.js
+          node --check public/auth.js
+          node --check public/discussion.js
+
+      - name: Validate Worker entry point
+        run: node --check src/worker.js
+
+      - name: Validate all D1 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db = sqlite3.connect(":memory:")
+          for migration in sorted(Path("migrations").glob("*.sql")):
+              db.executescript(migration.read_text())
+              print(f"Validated {migration.name}")
+          tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+          required = {"users", "tickets", "ticket_hold_periods", "ticket_comments", "ticket_attachments", "ticket_events", "audit_logs", "sessions"}
+          missing = required - tables
+          if missing:
+              raise SystemExit(f"Missing expected tables: {sorted(missing)}")
+          columns = {row[1] for row in db.execute("PRAGMA table_info(tickets)")}
+          required_columns = {"rejected_at", "assignment_mode", "assigned_by", "assigned_at"}
+          if required_columns - columns:
+              raise SystemExit(f"Missing ticket columns: {sorted(required_columns - columns)}")
+          print(f"All SQL migrations valid; {len(tables)} tables checked.")
+          PY
+
       - name: Check required GitHub secrets
         shell: bash
         env:
@@ -36,30 +69,6 @@ jobs:
           [[ -n "$CF_API_TOKEN" ]] || { echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN"; exit 1; }
           [[ -n "$CF_ACCOUNT_ID" ]] || { echo "::error::Missing repository secret CLOUDFLARE_ACCOUNT_ID"; exit 1; }
           echo "Cloudflare deployment credentials are present."
-
-      - name: Validate application JavaScript
-        run: node --check public/app.js
-
-      - name: Validate Worker entry point
-        run: node --check src/worker.js
-
-      - name: Validate D1 migration file
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import sqlite3
-          from pathlib import Path
-          sql = Path("migrations/0001_initial.sql").read_text()
-          db = sqlite3.connect(":memory:")
-          db.executescript(sql)
-          tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-          required = {"users", "tickets", "ticket_comments", "ticket_attachments", "ticket_events", "audit_logs"}
-          missing = required - tables
-          if missing:
-              raise SystemExit(f"Missing expected tables: {sorted(missing)}")
-          print(f"SQL migration valid; created {len(tables)} tables in an in-memory check.")
-          PY
 
       - name: Install Wrangler
         run: npm install --global wrangler@4.156.0
