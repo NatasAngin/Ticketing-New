@@ -4,7 +4,7 @@
 
 - Repository: `NatasAngin/Ticketing-New`
 - Branch: `main`
-- Live URL: https://bai-it-support-kpi.sumarewbarbosa.workers.dev/
+- Live URL: https://bai-it-support.sumarewbarbosa.workers.dev/
 - Deployment: GitHub Actions → Cloudflare Workers
 - Static application files: `public/`
 - Worker entry point: `src/worker.js`
@@ -42,7 +42,7 @@ You can also start a run manually from the Actions tab using **Run workflow**.
 
 Open:
 
-https://bai-it-support-kpi.sumarewbarbosa.workers.dev/api/health
+https://bai-it-support.sumarewbarbosa.workers.dev/api/health
 
 A healthy response reports `ok: true`, `worker: true`, and `database: true`. A failed D1 query returns HTTP 503 and a diagnostic message.
 
