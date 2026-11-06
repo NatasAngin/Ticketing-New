@@ -25,13 +25,11 @@ The repository no longer attempts to authenticate to Cloudflare from GitHub Acti
 3. Create a database named `bai-it-support-kpi-db`.
 4. Open the new database and copy its **Database ID**.
 
-### 2. Set the D1 ID in the repository
+### 2. D1 database configuration
 
-1. Open `BAI-IT-Support-Cloudflare-Pages/wrangler.worker.jsonc` on the `main` branch.
-2. Replace `__D1_DATABASE_ID__` with the Database ID copied from Cloudflare.
-3. Commit the change.
+The repository's `wrangler.worker.jsonc` already contains the D1 Database ID for `bai-it-support-kpi-db`. The binding is named `DB` because the Worker code accesses the database through `env.DB`.
 
-The ID is an identifier, not an API token. Never commit an API token or other credential.
+The Database ID is an identifier, not an API token. Never commit an API token or other credential.
 
 ### 3. Connect Cloudflare Workers Builds to GitHub
 
