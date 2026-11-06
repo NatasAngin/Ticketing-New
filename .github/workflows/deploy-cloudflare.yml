@@ -1,4 +1,4 @@
-name: Validate BAI IT Support
+name: Validate and deploy BAI IT Support
 
 on:
   push:
@@ -59,6 +59,56 @@ jobs:
           print(f"All SQL migrations valid; {len(tables)} tables checked.")
           PY
 
-      - name: Validate Wrangler configuration template
+      - name: Validate Wrangler configuration
         run: |
-          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.worker.jsonc','utf8'); if(!s.includes('__D1_DATABASE_ID__')) process.exit(1); JSON.parse(s); console.log('Worker configuration template is valid; replace the D1 ID in Cloudflare setup before deployment.')"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.worker.jsonc','utf8'); const c=JSON.parse(s); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
+
+  deploy:
+    name: Deploy Worker, static app, and D1
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BAI-IT-Support-Cloudflare-Pages
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::GitHub Secret CLOUDFLARE_API_TOKEN belum tersedia."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::GitHub Secret CLOUDFLARE_ACCOUNT_ID belum tersedia."; exit 1; }
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Apply D1 migrations
+        run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.worker.jsonc
+
+      - name: Deploy Worker and static application
+        run: wrangler deploy --config wrangler.worker.jsonc
+
+      - name: Verify live application and database
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --show-error https://bai-it-support.sumarewbarbosa.workers.dev/api/health -o health.json; then
+              cat health.json
+              node -e "const h=require('./health.json'); if(!h.ok||!h.worker||!h.database||!h.schema_ready) process.exit(1)"
+              curl --fail --silent --show-error https://bai-it-support.sumarewbarbosa.workers.dev/ -o homepage.html
+              grep -qi '<html' homepage.html
+              if grep -qi 'Hello World' homepage.html; then echo "::error::Worker masih menyajikan halaman Hello World."; exit 1; fi
+              echo "Live Worker, D1 schema, and application homepage verified."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Health check Worker gagal setelah beberapa percobaan."
+          exit 1
