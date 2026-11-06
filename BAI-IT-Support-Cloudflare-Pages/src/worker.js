@@ -68,13 +68,15 @@ async function api(r,env){
   for(const t of d.tickets){
    if(!t||typeof t.id!=="string"||!t.id||typeof t.title!=="string"||!t.title.trim()||!validPriority.includes(t.priority)||!validStatus.includes(t.status))return json({ok:false,error:"Terdapat tiket dengan data wajib tidak valid."},400);
    if(!isAdmin&&t.ownerId&&t.ownerId!==current.id)return json({ok:false,error:"User hanya dapat membuat tiket miliknya sendiri."},403);
-   const existing=await env.DB.prepare("SELECT owner_id FROM tickets WHERE id=?").bind(t.id).first();
+   const existing=await env.DB.prepare("SELECT owner_id,status FROM tickets WHERE id=?").bind(t.id).first();
    if(existing&&(!isAdmin&&existing.owner_id!==current.id))return json({ok:false,error:"Akses tiket ditolak."},403);
    if(existing&&!isAdmin)continue;
    if(!existing&&!isAdmin&&t.status!=="Baru")return json({ok:false,error:"User hanya dapat membuat tiket baru."},403);
    const owner=isAdmin?(t.ownerId||current.id):current.id,assigned=isAdmin?(t.assignedAccountId||null):null;
    await env.DB.prepare("INSERT INTO tickets(id,title,requester,department,category,priority,status,pic,owner_id,assigned_user_id,sla_hours,description,rejection_reason,hold_reason,created_at,resolved_at,rejected_at,assignment_mode,assigned_by,assigned_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now')) ON CONFLICT(id) DO UPDATE SET title=excluded.title,requester=excluded.requester,department=excluded.department,category=excluded.category,priority=excluded.priority,status=excluded.status,pic=excluded.pic,owner_id=excluded.owner_id,assigned_user_id=excluded.assigned_user_id,sla_hours=excluded.sla_hours,description=excluded.description,rejection_reason=excluded.rejection_reason,hold_reason=excluded.hold_reason,created_at=excluded.created_at,resolved_at=excluded.resolved_at,rejected_at=excluded.rejected_at,assignment_mode=excluded.assignment_mode,assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,updated_at=excluded.updated_at")
     .bind(t.id,t.title.trim(),String(t.requester||""),String(t.department||""),String(t.category||""),t.priority,isAdmin?t.status:"Baru",String(t.pic||""),owner,assigned,Number(t.sla)||24,String(t.notes||""),String(t.rejectionReason||""),String(t.holdReason||""),t.created||new Date().toISOString(),t.resolved||null,isAdmin?(t.rejectedAt||null):null,isAdmin?(t.assignmentMode||"legacy"):"auto",isAdmin?(t.assignedBy||null):null,isAdmin?(t.assignedAt||null):null).run();
+   if(!existing)await env.DB.prepare("INSERT INTO ticket_events(id,ticket_id,actor_user_id,event_type,event_data) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),t.id,current.id,"ticket_created",JSON.stringify({status:isAdmin?t.status:"Baru"})).run();
+   else if(isAdmin&&existing.status!==t.status)await env.DB.prepare("INSERT INTO ticket_events(id,ticket_id,actor_user_id,event_type,event_data) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),t.id,current.id,"status_changed",JSON.stringify({from:existing.status,to:t.status})).run();
    await env.DB.prepare("DELETE FROM ticket_hold_periods WHERE ticket_id=?").bind(t.id).run();
    if(isAdmin&&Array.isArray(t.holdPeriods))for(const period of t.holdPeriods.slice(0,100)){if(!period?.start)continue;await env.DB.prepare("INSERT INTO ticket_hold_periods(id,ticket_id,started_at,ended_at) VALUES(?,?,?,?)").bind(crypto.randomUUID(),t.id,period.start,period.end||null).run()}
   }
@@ -87,7 +89,7 @@ async function api(r,env){
   return json({ok:true,saved:d.tickets.length});
  }
  const ticketMatch=p.match(/^\/api\/tickets\/([^/]+)$/);
- if(ticketMatch&&m==="DELETE"){if(!admin(current))return json({ok:false,error:"Hanya administrator yang dapat menghapus tiket."},403);const id=decodeURIComponent(ticketMatch[1]);const result=await env.DB.prepare("DELETE FROM tickets WHERE id=?").bind(id).run();return json({ok:true,deleted:result.meta?.changes||0})}
+ if(ticketMatch&&m==="DELETE"){if(!admin(current))return json({ok:false,error:"Hanya administrator yang dapat menghapus tiket."},403);const id=decodeURIComponent(ticketMatch[1]);await audit(env,current.id,"delete","ticket",id);const result=await env.DB.prepare("DELETE FROM tickets WHERE id=?").bind(id).run();return json({ok:true,deleted:result.meta?.changes||0})}
  if(p.startsWith("/api/"))return json({ok:false,error:"Endpoint API belum tersedia."},404);
  return env.ASSETS.fetch(r)
 }
