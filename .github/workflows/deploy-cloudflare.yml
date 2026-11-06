@@ -62,7 +62,7 @@ jobs:
 
       - name: Validate Wrangler configuration
         run: |
-          node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')); if(c.name!=='bai-it-support-kpi'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
+          node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
 
   deploy:
     name: Deploy Worker, static app, and D1
@@ -116,10 +116,10 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
-            if curl --fail --silent --show-error https://bai-it-support-kpi.sumarewbarbosa.workers.dev/api/health -o health.json; then
+            if curl --fail --silent --show-error https://bai-it-support.sumarewbarbosa.workers.dev/api/health -o health.json; then
               cat health.json
               node -e "const h=require('./health.json'); if(!h.ok||!h.worker||!h.database||!h.schema_ready) process.exit(1)"
-              curl --fail --silent --show-error https://bai-it-support-kpi.sumarewbarbosa.workers.dev/ -o homepage.html
+              curl --fail --silent --show-error https://bai-it-support.sumarewbarbosa.workers.dev/ -o homepage.html
               grep -qi '<html' homepage.html
               if grep -qi 'Hello World' homepage.html; then echo "::error::Worker masih menyajikan halaman Hello World."; exit 1; fi
               echo "Live Worker, D1 schema, and application homepage verified."
