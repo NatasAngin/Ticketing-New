@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --config wrangler.worker.jsonc",
-    "deploy": "wrangler deploy --config wrangler.worker.jsonc",
-    "db:migrate:remote": "wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.worker.jsonc"
+    "dev": "wrangler dev --config wrangler.jsonc",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.jsonc"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"
