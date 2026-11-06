@@ -117,7 +117,7 @@ async function api(r,env){
   return json({ok:true,saved:d.tickets.length});
  }
  const ticketMatch=p.match(/^\/api\/tickets\/([^/]+)$/);
- if(ticketMatch&&m==="DELETE"){if(!admin(current))return json({ok:false,error:"Hanya administrator yang dapat menghapus tiket."},403);const id=decodeURIComponent(ticketMatch[1]);const files=await env.DB.prepare("SELECT object_key FROM ticket_attachments WHERE ticket_id=?").bind(id).all();for(const file of files.results||[])await env.ATTACHMENTS.delete(file.object_key);await audit(env,current.id,"delete","ticket",id);const result=await env.DB.prepare("DELETE FROM tickets WHERE id=?").bind(id).run();return json({ok:true,deleted:result.meta?.changes||0})}
+ if(ticketMatch&&m==="DELETE"){if(!admin(current))return json({ok:false,error:"Hanya administrator yang dapat menghapus tiket."},403);const id=decodeURIComponent(ticketMatch[1]);await audit(env,current.id,"delete","ticket",id);const result=await env.DB.prepare("DELETE FROM tickets WHERE id=?").bind(id).run();return json({ok:true,deleted:result.meta?.changes||0})}
  if(p.startsWith("/api/"))return json({ok:false,error:"Endpoint API belum tersedia."},404);
  return env.ASSETS.fetch(r)
 }
