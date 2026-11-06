@@ -62,7 +62,7 @@ jobs:
 
       - name: Validate Wrangler configuration
         run: |
-          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.jsonc','utf8'); const c=JSON.parse(s); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
+          node -e "const fs=require('fs'); const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8')); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
 
   deploy:
     name: Deploy Worker, static app, and D1
@@ -88,6 +88,51 @@ jobs:
 
       - name: Install Wrangler
         run: npm install --global wrangler@4
+
+      - name: Verify Cloudflare account and resolve D1 database
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler whoami
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$api" -o d1-list.json
+          node <<'NODE'
+          const fs = require('fs');
+          const response = JSON.parse(fs.readFileSync('d1-list.json', 'utf8'));
+          if (!response.success || !Array.isArray(response.result)) {
+            console.error('Cloudflare API tidak mengembalikan daftar D1 yang valid:', response.errors || response);
+            process.exit(1);
+          }
+          const name = 'bai-it-support-kpi-db';
+          let database = response.result.find(item => item.name === name);
+          if (!database) {
+            console.log('Database belum ada di akun ini; membuat D1:', name);
+            fs.writeFileSync('d1-create-needed', 'yes');
+          } else {
+            console.log('Database ditemukan. UUID akan diselaraskan ke konfigurasi Worker.');
+            fs.writeFileSync('d1-resolved-id', database.uuid);
+          }
+          NODE
+          if [ -f d1-create-needed ]; then
+            curl --fail --silent --show-error \
+              -X POST "$api" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data '{"name":"bai-it-support-kpi-db"}' -o d1-create.json
+            node -e "const r=require('./d1-create.json'); if(!r.success||!r.result?.uuid){console.error(r.errors||r);process.exit(1)} require('fs').writeFileSync('d1-resolved-id',r.result.uuid); console.log('D1 database berhasil dibuat.')"
+          fi
+          node <<'NODE'
+          const fs = require('fs');
+          const configPath = 'wrangler.jsonc';
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          const database = config.d1_databases.find(item => item.binding === 'DB');
+          if (!database) throw new Error('Binding D1 DB tidak ditemukan.');
+          database.database_id = fs.readFileSync('d1-resolved-id', 'utf8').trim();
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+          console.log('Konfigurasi Wrangler diperbarui menggunakan UUID D1 dari akun Cloudflare yang aktif.');
+          NODE
 
       - name: Apply D1 migrations
         run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.jsonc
