@@ -62,6 +62,7 @@ async function api(r,env){
   const form=await r.formData(),file=form.get("file");
   if(!file||typeof file.arrayBuffer!=="function")return json({ok:false,error:"File lampiran wajib dipilih."},400);
   if(!file.size||file.size>10*1024*1024)return json({ok:false,error:"Ukuran setiap file maksimal 10 MB."},400);
+  const totals=await env.DB.prepare("SELECT COUNT(*) AS n,COALESCE(SUM(size_bytes),0) AS bytes FROM ticket_attachments WHERE comment_id=?").bind(commentId).first();if(totals.n>=3||Number(totals.bytes)+file.size>20*1024*1024)return json({ok:false,error:"Maksimal 3 file dan total 20 MB per pesan."},400);
   const bytes=new Uint8Array(await file.slice(0,5).arrayBuffer()),pdf=bytes.length>=5&&String.fromCharCode(...bytes)==="%PDF-",jpg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
   if(!pdf&&!jpg)return json({ok:false,error:"Isi file harus PDF atau JPG yang valid."},415);
   const name=String(file.name||"lampiran").replace(/[\\/\x00-\x1f"]/g,"_").slice(0,180),type=pdf?"application/pdf":"image/jpeg",id=crypto.randomUUID(),key=comment.ticket_id+"/"+commentId+"/"+id;
