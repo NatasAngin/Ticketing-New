@@ -1,34 +1,16 @@
 # BAI IT Support & KPI Dashboard
 
-Aplikasi statis untuk Cloudflare Pages. Tidak menggunakan Cloudflare R2.
+Production deployment is now managed through **GitHub Actions → Cloudflare Workers + D1**.
 
-## Deploy dari GitHub ke Cloudflare Pages
+- Live application: https://bai-it-support-kpi.sumarewbarbosa.workers.dev/
+- Source project: [BAI-IT-Support-Cloudflare-Pages](./BAI-IT-Support-Cloudflare-Pages/)
+- Deployment workflow: [Deploy BAI IT Support to Cloudflare Workers](./.github/workflows/deploy-cloudflare.yml)
+- Setup and troubleshooting: [Project deployment README](./BAI-IT-Support-Cloudflare-Pages/README.md)
 
-Repository: `NatasAngin/Ticketing-New`  
-Branch: `main`  
-Root directory (advanced): `BAI-IT-Support-Cloudflare-Pages`  
-Framework preset: `None`  
-Build command: kosongkan  
-Build output directory: `public`
+Every push to `main` that changes the application or deployment workflow triggers validation, D1 provisioning (if needed), migrations, Worker deployment, and a live health check.
 
-Jangan gunakan `npx wrangler deploy`: itu perintah untuk Cloudflare Workers dan menyebabkan error deteksi static assets pada project Pages ini.
+Required repository Actions secrets:
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
 
-Jika melakukan deploy manual melalui terminal dari folder `BAI-IT-Support-Cloudflare-Pages`:
-
-```bash
-npm install
-npx wrangler login
-npm run deploy
-```
-
-Script deploy yang tersedia menjalankan:
-
-```bash
-wrangler pages deploy public --project-name bai-it-support-kpi
-```
-
-## Catatan penyimpanan
-
-Aplikasi ini saat ini menyimpan akun, tiket, dan pengaturan di browser (localStorage/IndexedDB). Data tidak tersinkron antar-PC atau antar-browser. Cloudflare Pages hanya meng-host file statis. Jangan menghapus data browser sebelum melakukan backup/ekspor yang tersedia.
-
-Tidak ada konfigurasi atau kebutuhan R2.
+The first D1 migration creates the central schema. Existing application data is still browser-local until the frontend's authentication, ticket, discussion, and attachment operations are migrated to Worker API endpoints.
