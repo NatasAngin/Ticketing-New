@@ -39,14 +39,14 @@ async function api(r,env){
   if(!ticket)return json({ok:false,error:"Tiket tidak ditemukan."},404);
   if(!admin(current)&&ticket.owner_id!==current.id)return json({ok:false,error:"Akses diskusi tiket ditolak."},403);
   if(m==="GET"){
-   const q=await env.DB.prepare("SELECT c.id,c.ticket_id,c.user_id,u.full_name AS author_name,u.role AS author_role,c.body,c.created_at FROM ticket_comments c LEFT JOIN users u ON u.id=c.user_id WHERE c.ticket_id=? ORDER BY c.created_at,c.id").bind(ticketId).all();
-   const messages=[];for(const c of q.results||[]){const a=await env.DB.prepare("SELECT id,file_name,content_type,size_bytes FROM ticket_attachments WHERE comment_id=? ORDER BY created_at").bind(c.id).all();messages.push({id:c.id,ticketId:c.ticket_id,authorId:c.user_id,authorName:c.author_name||"Akun tidak tersedia",authorRole:roleOut(c.author_role),text:c.body,replyTo:null,attachments:(a.results||[]).map(x=>({id:x.id,name:x.file_name,type:x.content_type,size:x.size_bytes})),createdAt:c.created_at})}
+   const q=await env.DB.prepare("SELECT c.id,c.ticket_id,c.user_id,u.full_name AS author_name,u.role AS author_role,c.body,c.reply_to,c.created_at FROM ticket_comments c LEFT JOIN users u ON u.id=c.user_id WHERE c.ticket_id=? ORDER BY c.created_at,c.id").bind(ticketId).all();
+   const messages=[];for(const c of q.results||[]){const a=await env.DB.prepare("SELECT id,file_name,content_type,size_bytes FROM ticket_attachments WHERE comment_id=? ORDER BY created_at").bind(c.id).all();messages.push({id:c.id,ticketId:c.ticket_id,authorId:c.user_id,authorName:c.author_name||"Akun tidak tersedia",authorRole:roleOut(c.author_role),text:c.body,replyTo:c.reply_to,attachments:(a.results||[]).map(x=>({id:x.id,name:x.file_name,type:x.content_type,size:x.size_bytes})),createdAt:c.created_at})}
    return json({ok:true,messages});
   }
   const d=await body(r),text=typeof d?.text==="string"?d.text.trim():"",id=typeof d?.id==="string"&&/^[a-f0-9-]{36}$/i.test(d.id)?d.id:crypto.randomUUID();
   if(!text||text.length>5000)return json({ok:false,error:"Pesan wajib diisi dan maksimal 5.000 karakter."},400);
   if(d.replyTo){const reply=await env.DB.prepare("SELECT id FROM ticket_comments WHERE id=? AND ticket_id=?").bind(d.replyTo,ticketId).first();if(!reply)return json({ok:false,error:"Pesan yang dibalas tidak ditemukan."},400)}
-  try{await env.DB.prepare("INSERT INTO ticket_comments(id,ticket_id,user_id,body) VALUES(?,?,?,?)").bind(id,ticketId,current.id,text).run()}catch{return json({ok:false,error:"Pesan gagal disimpan. Muat ulang diskusi dan coba kembali."},409)}
+  try{await env.DB.prepare("INSERT INTO ticket_comments(id,ticket_id,user_id,body,reply_to) VALUES(?,?,?,?,?)").bind(id,ticketId,current.id,text,d.replyTo||null).run()}catch{return json({ok:false,error:"Pesan gagal disimpan. Muat ulang diskusi dan coba kembali."},409)}
   await env.DB.prepare("INSERT INTO ticket_events(id,ticket_id,actor_user_id,event_type,event_data) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),ticketId,current.id,"comment_created",JSON.stringify({commentId:id,replyTo:d.replyTo||null})).run();
   return json({ok:true,message:{id,ticketId,authorId:current.id,authorName:current.name,authorRole:roleOut(current.role),text,replyTo:d.replyTo||null,attachments:[],createdAt:new Date().toISOString()}},201);
  }
