@@ -8,3 +8,6 @@ CREATE TABLE IF NOT EXISTS auth_login_attempts (
   PRIMARY KEY (username_key, ip_hash)
 );
 CREATE INDEX IF NOT EXISTS idx_auth_login_blocked ON auth_login_attempts(blocked_until);
+
+-- Prevent concurrent first-time setup from creating multiple active Super Admins.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_active_super_admin ON users(role) WHERE role = 'super_admin' AND is_active = 1;
