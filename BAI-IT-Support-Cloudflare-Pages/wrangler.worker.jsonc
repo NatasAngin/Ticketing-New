@@ -1,6 +1,6 @@
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/schema.json",
-  "name": "bai-it-support-kpi",
+  "name": "bai-it-support",
   "main": "./src/worker.js",
   "compatibility_date": "2026-11-06",
   "workers_dev": true,
