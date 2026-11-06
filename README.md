@@ -1,16 +1,30 @@
 # BAI IT Support & KPI Dashboard
 
-Production deployment is now managed through **GitHub Actions → Cloudflare Workers + D1**.
+Aplikasi helpdesk internal PT Borneo Alumina Indonesia.
 
-- Live application: https://bai-it-support-kpi.sumarewbarbosa.workers.dev/
-- Source project: [BAI-IT-Support-Cloudflare-Pages](./BAI-IT-Support-Cloudflare-Pages/)
-- Deployment workflow: [Deploy BAI IT Support to Cloudflare Workers](./.github/workflows/deploy-cloudflare.yml)
-- Setup and troubleshooting: [Project deployment README](./BAI-IT-Support-Cloudflare-Pages/README.md)
+- **Worker:** `bai-it-support`
+- **Aplikasi:** https://bai-it-support.sumarewbarbosa.workers.dev/
+- **Health check:** https://bai-it-support.sumarewbarbosa.workers.dev/api/health
+- **Source:** [BAI-IT-Support-Cloudflare-Pages](./BAI-IT-Support-Cloudflare-Pages/)
+- **Deployment:** [GitHub Actions workflow](./.github/workflows/deploy-cloudflare.yml)
 
-Every push to `main` that changes the application or deployment workflow triggers validation, D1 provisioning (if needed), migrations, Worker deployment, and a live health check.
+## Deployment
 
-Required repository Actions secrets:
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
+Setiap perubahan pada `main` di folder aplikasi atau workflow akan menjalankan validasi, menerapkan migrasi D1, deploy Worker beserta static assets, lalu menguji endpoint health dan halaman utama.
 
-The first D1 migration creates the central schema. Existing application data is still browser-local until the frontend's authentication, ticket, discussion, and attachment operations are migrated to Worker API endpoints.
+GitHub Actions memerlukan dua repository Actions secrets yang dibuat dari akun Cloudflare pemilik Worker:
+
+- `CLOUDFLARE_API_TOKEN` — token dengan izin Account Workers Scripts Edit dan D1 Edit.
+- `CLOUDFLARE_ACCOUNT_ID` — Account ID Cloudflare.
+
+Tambahkan keduanya di **Settings → Secrets and variables → Actions**. Jangan commit token ke repository atau membagikannya melalui chat. Setelah secrets tersedia, jalankan ulang job yang gagal pada tab Actions.
+
+## Infrastruktur
+
+- Worker: `bai-it-support`
+- D1 database: `bai-it-support-kpi-db`
+- D1 binding: `DB`
+- Assets binding: `ASSETS`
+- Database migrations: `BAI-IT-Support-Cloudflare-Pages/migrations/`
+
+Status deployment hanya dianggap berhasil jika GitHub Actions selesai sukses, endpoint `/api/health` menyatakan database dan schema siap, serta halaman utama memuat aplikasi (bukan halaman Hello World).
