@@ -1,46 +1,24 @@
-const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff"
-    }
-  });
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/api/health") {
-      try {
-        const result = await env.DB.prepare("SELECT 1 AS ok").first();
-        if (result?.ok !== 1) {
-          return json({ ok: false, worker: true, database: false, error: "D1 health query returned an unexpected result" }, 503);
-        }
-
-        return json({
-          ok: true,
-          service: "BAI IT Support API",
-          worker: true,
-          database: true,
-          checked_at: new Date().toISOString()
-        });
-      } catch (error) {
-        return json({
-          ok: false,
-          service: "BAI IT Support API",
-          worker: true,
-          database: false,
-          error: error instanceof Error ? error.message : "D1 connection failed"
-        }, 503);
-      }
-    }
-
-    if (url.pathname.startsWith("/api/")) {
-      return json({ ok: false, error: "API route not implemented yet" }, 404);
-    }
-
-    return env.ASSETS.fetch(request);
-  }
-};
+const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff",...headers}});
+const COOKIE="bai_it_session", enc=new TextEncoder();
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+const randomHex=(n=32)=>hex(crypto.getRandomValues(new Uint8Array(n)));
+const digest=async s=>hex(await crypto.subtle.digest("SHA-256",enc.encode(s)));
+async function passHash(password,salt){const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:Uint8Array.from(salt.match(/.{2}/g),x=>parseInt(x,16)),iterations:210000,hash:"SHA-256"},key,256))}
+const cookie=(token,age=604800)=>COOKIE+"="+encodeURIComponent(token)+"; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age="+age;
+const getCookie=(r)=>{const s=r.headers.get("Cookie")||"",m=s.split(";").map(x=>x.trim()).find(x=>x.startsWith(COOKIE+"="));return m?decodeURIComponent(m.slice(COOKIE.length+1)):""};
+async function body(r){try{const x=await r.json();return x&&typeof x==="object"&&!Array.isArray(x)?x:null}catch{return null}}
+const validUser=s=>typeof s==="string"&&/^[a-zA-Z0-9._-]{3,80}$/.test(s.trim());
+async function session(r,env){const t=getCookie(r);if(!t)return null;return env.DB.prepare("SELECT u.id,u.full_name AS name,u.username,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now') AND u.is_active=1").bind(await digest(t)).first()}
+async function newSession(id,env){const t=randomHex();await env.DB.prepare("INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES(?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now','+7 days'))").bind(crypto.randomUUID(),id,await digest(t)).run();return t}
+async function api(r,env){
+ const u=new URL(r.url),p=u.pathname,m=r.method;
+ if(p==="/api/health"&&m==="GET"){try{const q=await env.DB.prepare("SELECT 1 AS ok").first(),s=await env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('users','tickets','sessions')").first();const ready=q?.ok===1&&s?.n===3;return json({ok:ready,service:"BAI IT Support API",worker:true,database:q?.ok===1,schema_ready:s?.n===3,checked_at:new Date().toISOString()},ready?200:503)}catch(e){return json({ok:false,worker:true,database:false,error:e.message},503)}}
+ if(p==="/api/auth/status"&&m==="GET"){const q=await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role='super_admin' AND is_active=1").first();return json({ok:true,setup_required:!q?.n})}
+ if(p==="/api/auth/setup"&&m==="POST"){const d=await body(r);if(!d||typeof d.fullName!=="string"||!validUser(d.username)||typeof d.password!=="string"||d.password.length<12)return json({ok:false,error:"Nama, username valid, dan password minimal 12 karakter wajib diisi."},400);if(d.fullName.trim().normalize("NFKC").toLocaleLowerCase("id-ID")!=="trisnardi boesyanto")return json({ok:false,error:"Pembuatan Super Admin pertama hanya untuk akun yang telah ditetapkan."},403);const exists=await env.DB.prepare("SELECT id FROM users WHERE role='super_admin' AND is_active=1 LIMIT 1").first();if(exists)return json({ok:false,error:"Super Admin sudah terdaftar. Silakan login."},409);const salt=randomHex(16),hash=await passHash(d.password,salt),id=crypto.randomUUID();try{await env.DB.prepare("INSERT INTO users(id,full_name,username,password_hash,role) VALUES(?,?,?,?, 'super_admin')").bind(id,d.fullName.trim(),d.username.trim().toLowerCase(),salt+":"+hash).run()}catch(e){return json({ok:false,error:"Akun tidak dapat dibuat. Pastikan username belum digunakan.",detail:e.message},409)}const t=await newSession(id,env);return json({ok:true,user:{id,name:d.fullName.trim(),username:d.username.trim().toLowerCase(),role:"super_admin"}},201,{"set-cookie":cookie(t)})}
+ if(p==="/api/auth/login"&&m==="POST"){const d=await body(r);if(!d||!validUser(d.username)||typeof d.password!=="string")return json({ok:false,error:"Username dan password wajib diisi."},400);const a=await env.DB.prepare("SELECT id,full_name AS name,username,role,password_hash FROM users WHERE username=? COLLATE NOCASE AND is_active=1").bind(d.username.trim()).first();if(!a||!a.password_hash?.includes(":"))return json({ok:false,error:"Username atau password salah."},401);const [salt,want]=a.password_hash.split(":");if(await passHash(d.password,salt)!==want)return json({ok:false,error:"Username atau password salah."},401);const t=await newSession(a.id,env);return json({ok:true,user:{id:a.id,name:a.name,username:a.username,role:a.role}},200,{"set-cookie":cookie(t)})}
+ if(p==="/api/auth/me"&&m==="GET"){const a=await session(r,env);return a?json({ok:true,user:a}):json({ok:false,error:"Sesi tidak ditemukan atau telah berakhir."},401)}
+ if(p==="/api/auth/logout"&&m==="POST"){const t=getCookie(r);if(t)await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(t)).run();return json({ok:true},200,{"set-cookie":cookie("",0)})}
+ if(p.startsWith("/api/"))return json({ok:false,error:"Endpoint API belum tersedia."},404);
+ return env.ASSETS.fetch(r)
+}
+export default {async fetch(request,env){try{return await api(request,env)}catch(e){return json({ok:false,error:"Terjadi kesalahan pada layanan.",detail:e instanceof Error?e.message:"Unknown error"},500)}}};
