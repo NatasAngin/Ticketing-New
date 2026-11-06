@@ -144,7 +144,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://bai-it-support-kpi.sumarewbarbosa.workers.dev/api/health"
+          URL="https://bai-it-support.sumarewbarbosa.workers.dev/api/health"
           echo "Checking $URL"
           for attempt in {1..10}; do
             RESPONSE=$(curl --silent --show-error "$URL" || true)
