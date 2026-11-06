@@ -6,6 +6,7 @@ on:
     paths:
       - "BAI-IT-Support-Cloudflare-Pages/**"
       - ".github/workflows/deploy-cloudflare.yml"
+      - "wrangler.jsonc"
   pull_request:
     paths:
       - "BAI-IT-Support-Cloudflare-Pages/**"
