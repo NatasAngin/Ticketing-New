@@ -1,0 +1,20 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/schema.json",
+  "name": "bai-it-support",
+  "main": "./src/worker.js",
+  "compatibility_date": "2026-11-06",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bai-it-support-kpi-db",
+      "database_id": "62a40aac-0c11-4b89-ae94-13bc0f460c71",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}
