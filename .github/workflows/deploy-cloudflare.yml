@@ -62,7 +62,7 @@ jobs:
 
       - name: Validate Wrangler configuration
         run: |
-          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.worker.jsonc','utf8'); const c=JSON.parse(s); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
+          node -e "const fs=require('fs'); const s=fs.readFileSync('wrangler.jsonc','utf8'); const c=JSON.parse(s); if(c.name!=='bai-it-support'||!c.assets?.binding||!c.d1_databases?.some(x=>x.binding==='DB'&&x.database_id)) process.exit(1); console.log('Worker, static assets, and D1 configuration valid.')"
 
   deploy:
     name: Deploy Worker, static app, and D1
@@ -90,10 +90,10 @@ jobs:
         run: npm install --global wrangler@4
 
       - name: Apply D1 migrations
-        run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.worker.jsonc
+        run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.jsonc
 
       - name: Deploy Worker and static application
-        run: wrangler deploy --config wrangler.worker.jsonc
+        run: wrangler deploy --config wrangler.jsonc
 
       - name: Verify live application and database
         shell: bash
