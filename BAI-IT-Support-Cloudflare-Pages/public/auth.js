@@ -70,9 +70,9 @@ function assertAccountPermission(target,nextRole){
 function renderAccounts(){
  if(!isAdmin()){document.getElementById("account-rows").innerHTML="";return}
  configureRoleOptions(document.getElementById("account-form").elements.role,"user");
- document.getElementById("account-rows").innerHTML=accounts.filter(accountEnabled).map(a=>{
+ document.getElementById("account-rows").innerHTML=accounts.map(a=>{
   const protectedAccount=a.role==="superadmin"&&!isSuperAdmin(),roleLocked=a.id===activeUser.id||protectedAccount||a.role==="administrator"&&!isSuperAdmin();
-  return "<tr><td><strong>"+authEscape(a.name)+"</strong><small>"+authEscape(a.username)+"</small></td><td><select aria-label='Role "+authEscape(a.username)+"' data-account-role='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+">"+roleOptions(a.role)+"</select></td><td>"+(a.id===activeUser.id?"Akun Anda":protectedAccount?"Super Admin · dilindungi":"Aktif")+"</td><td><button type='button' class='edit' data-edit-account='"+authEscape(a.id)+"' "+(protectedAccount?"disabled":"")+">Edit Akun</button> <button type='button' data-toggle-account='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+">Nonaktifkan</button> <button type='button' class='danger' data-delete-account='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+">Hapus</button></td></tr>";
+  return "<tr><td><strong>"+authEscape(a.name)+"</strong><small>"+authEscape(a.username)+"</small></td><td><select aria-label='Role "+authEscape(a.username)+"' data-account-role='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+">"+roleOptions(a.role)+"</select></td><td>"+(a.id===activeUser.id?"Akun Anda":protectedAccount?"Super Admin · dilindungi":a.active===false?"Nonaktif":"Aktif") +"</td><td><button type='button' class='edit' data-edit-account='"+authEscape(a.id)+"' "+(protectedAccount?"disabled":"")+">Edit Akun</button> <button type='button' data-toggle-account='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+"+(a.active===false?"Aktifkan":"Nonaktifkan")+"</button> <button type='button' class='danger' data-delete-account='"+authEscape(a.id)+"' "+(roleLocked?"disabled":"")+">Hapus</button></td></tr>";
  }).join("")||"<tr><td colspan='4'>Belum ada akun.</td></tr>";
  document.querySelectorAll("[data-toggle-account]").forEach(b=>b.onclick=()=>accountAction(b.dataset.toggleAccount,"toggle"));
  document.querySelectorAll("[data-delete-account]").forEach(b=>b.onclick=()=>accountAction(b.dataset.deleteAccount,"delete"));
@@ -106,8 +106,8 @@ async function accountAction(id,action){
  if(action==="delete"&&!confirm("Hapus/nonaktifkan akun "+a.name+"? Akun tidak dapat login lagi. Riwayat tiket tetap dipertahankan."))return;
  try{assertAccountPermission(a,a.role);if(a.id===activeUser.id)throw Error("Akun yang sedang dipakai tidak dapat dinonaktifkan.");if(a.role==="administrator"&&!isSuperAdmin())throw Error("Hanya Super Admin yang dapat mengelola akun Administrator.");
   if(action==="delete")await authApi("/api/accounts/"+encodeURIComponent(id),{method:"DELETE",body:"{}"});
-  else await authApi("/api/accounts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({active:false})});
-  await loadAccounts();renderAccounts();render();toast(action==="delete"?"Akun dinonaktifkan":"Status akun diperbarui");
+  else await authApi("/api/accounts/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({active:a.active===false})});
+  await loadAccounts();renderAccounts();render();toast(action==="delete"?"Akun dinonaktifkan":a.active===false?"Akun diaktifkan":"Akun dinonaktifkan");
  }catch(error){authError("account-error",error)}
 }
 async function changeAccountRole(id,role){const a=accounts.find(x=>x.id===id);if(!a)throw Error("Akun tidak ditemukan.");assertAccountPermission(a,role);await updateAccount(id,{name:a.name,username:a.username,role,password:""});await loadAccounts()}
