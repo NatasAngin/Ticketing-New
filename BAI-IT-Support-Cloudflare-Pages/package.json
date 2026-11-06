@@ -1,10 +1,11 @@
 {
-  "name": "bai-it-support-kpi",
+  "name": "bai-it-support",
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler pages dev public",
-    "deploy": "wrangler pages deploy public --project-name bai-it-support-kpi"
+    "dev": "wrangler dev --config wrangler.worker.jsonc",
+    "deploy": "wrangler deploy --config wrangler.worker.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.worker.jsonc"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"
