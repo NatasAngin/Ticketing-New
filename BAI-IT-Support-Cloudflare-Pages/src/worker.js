@@ -53,6 +53,33 @@ async function api(r,env){
   await env.DB.prepare("INSERT INTO ticket_events(id,ticket_id,actor_user_id,event_type,event_data) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),ticketId,current.id,"comment_created",JSON.stringify({commentId:id,replyTo:d.replyTo||null})).run();
   return json({ok:true,message:{id,ticketId,authorId:current.id,authorName:current.name,authorRole:roleOut(current.role),text,replyTo:d.replyTo||null,attachments:[],createdAt:new Date().toISOString()}},201);
  }
+ const uploadRoute=p.match(/^\/api\/comments\/([a-f0-9-]+)\/attachments$/i);
+ if(uploadRoute&&m==="POST"){
+  if(!current)return json({ok:false,error:"Login diperlukan."},401);
+  const commentId=uploadRoute[1],comment=await env.DB.prepare("SELECT c.id,c.ticket_id,t.owner_id FROM ticket_comments c JOIN tickets t ON t.id=c.ticket_id WHERE c.id=?").bind(commentId).first();
+  if(!comment)return json({ok:false,error:"Pesan diskusi tidak ditemukan."},404);
+  if(!admin(current)&&comment.owner_id!==current.id)return json({ok:false,error:"Akses lampiran ditolak."},403);
+  const form=await r.formData(),file=form.get("file");
+  if(!file||typeof file.arrayBuffer!=="function")return json({ok:false,error:"File lampiran wajib dipilih."},400);
+  if(!file.size||file.size>10*1024*1024)return json({ok:false,error:"Ukuran setiap file maksimal 10 MB."},400);
+  const bytes=new Uint8Array(await file.slice(0,5).arrayBuffer()),pdf=bytes.length>=5&&String.fromCharCode(...bytes)==="%PDF-",jpg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
+  if(!pdf&&!jpg)return json({ok:false,error:"Isi file harus PDF atau JPG yang valid."},415);
+  const name=String(file.name||"lampiran").replace(/[\\/\x00-\x1f"]/g,"_").slice(0,180),type=pdf?"application/pdf":"image/jpeg",id=crypto.randomUUID(),key=comment.ticket_id+"/"+commentId+"/"+id;
+  await env.ATTACHMENTS.put(key,file.stream(),{httpMetadata:{contentType:type}});
+  try{await env.DB.prepare("INSERT INTO ticket_attachments(id,ticket_id,comment_id,file_name,content_type,object_key,size_bytes) VALUES(?,?,?,?,?,?,?)").bind(id,comment.ticket_id,commentId,name,type,key,file.size).run()}
+  catch(e){await env.ATTACHMENTS.delete(key);throw e}
+  await env.DB.prepare("INSERT INTO ticket_events(id,ticket_id,actor_user_id,event_type,event_data) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),comment.ticket_id,current.id,"attachment_uploaded",JSON.stringify({attachmentId:id,commentId})).run();
+  return json({ok:true,attachment:{id,name,type,size:file.size}},201);
+ }
+ const downloadRoute=p.match(/^\/api\/attachments\/([a-f0-9-]+)$/i);
+ if(downloadRoute&&m==="GET"){
+  if(!current)return json({ok:false,error:"Login diperlukan."},401);
+  const file=await env.DB.prepare("SELECT a.id,a.file_name,a.content_type,a.object_key,a.size_bytes,t.owner_id FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id WHERE a.id=?").bind(downloadRoute[1]).first();
+  if(!file)return json({ok:false,error:"Lampiran tidak ditemukan."},404);
+  if(!admin(current)&&file.owner_id!==current.id)return json({ok:false,error:"Akses lampiran ditolak."},403);
+  const object=await env.ATTACHMENTS.get(file.object_key);if(!object)return json({ok:false,error:"File lampiran tidak tersedia di penyimpanan."},404);
+  return new Response(object.body,{headers:{"content-type":file.content_type,"content-length":String(file.size_bytes),"content-disposition":"attachment; filename*=UTF-8''"+encodeURIComponent(file.file_name),"cache-control":"private, no-store","x-content-type-options":"nosniff"}});
+ }
  if(p==="/api/data"&&m==="GET"){
   if(!current)return json({ok:false,error:"Login diperlukan."},401);
   const q=admin(current)?await env.DB.prepare("SELECT * FROM tickets ORDER BY created_at DESC").all():await env.DB.prepare("SELECT * FROM tickets WHERE owner_id=? ORDER BY created_at DESC").bind(current.id).all();
