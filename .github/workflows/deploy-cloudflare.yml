@@ -105,6 +105,26 @@ jobs:
           console.log('D1 binding DB ditemukan:', database.database_name);
           NODE
 
+      - name: Resolve D1 database in the authenticated Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler d1 list --json > d1-databases.json
+          node <<'NODE'
+          const fs = require('fs');
+          const configPath = 'wrangler.jsonc';
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          const databases = JSON.parse(fs.readFileSync('d1-databases.json', 'utf8'));
+          const database = databases.find(item => item.name === 'bai-it-support-kpi-db');
+          if (!database?.uuid) {
+            throw new Error('Database D1 bai-it-support-kpi-db tidak ditemukan pada akun Cloudflare yang terhubung. Periksa akun dan izin token.');
+          }
+          const binding = config.d1_databases.find(item => item.binding === 'DB');
+          binding.database_id = database.uuid;
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\\n');
+          console.log('D1 database terverifikasi:', database.name);
+          NODE
+
       - name: Apply D1 migrations
         run: wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.jsonc
 
