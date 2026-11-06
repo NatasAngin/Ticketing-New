@@ -1,59 +1,77 @@
 # BAI IT Support — Cloudflare Workers + D1
 
-## Target deployment
+## Architecture
 
-- Repository: `NatasAngin/Ticketing-New`
+- GitHub repository: `NatasAngin/Ticketing-New`
 - Branch: `main`
-- Live URL: https://bai-it-support.sumarewbarbosa.workers.dev/
-- Deployment: GitHub Actions → Cloudflare Workers
-- Static application files: `public/`
+- Worker name: `bai-it-support`
+- Target URL: https://bai-it-support.sumarewbarbosa.workers.dev/
 - Worker entry point: `src/worker.js`
-- D1 database: `bai-it-support-kpi-db`
+- Static assets: `public/`
+- D1 database name: `bai-it-support-kpi-db`
 - D1 binding: `DB`
-- Migration directory: `migrations/`
+- SQL migrations: `migrations/`
 
-## One-time GitHub configuration
+This application needs a Cloudflare Worker and a D1 database. Deploying only the `public/` folder as a Pages static site will not provide the login, ticket API, or shared database.
 
-Open **GitHub → Settings → Secrets and variables → Actions → New repository secret** and add:
+## Deployment without GitHub Secrets
 
-1. `CLOUDFLARE_API_TOKEN` — Cloudflare API token with Account-level **Workers Scripts: Edit** and **D1: Edit** permissions for the account that owns the Worker.
-2. `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID.
+The repository no longer attempts to authenticate to Cloudflare from GitHub Actions. GitHub Actions only validates JavaScript and SQL migrations. Use Cloudflare's Git integration (Workers Builds), which connects your GitHub repository to your Cloudflare account without putting a Cloudflare API token in GitHub repository secrets.
 
-Do not put either value in source files, commits, or chat messages.
+### 1. Create the D1 database
 
-## Automatic deployment
+1. Sign in to the Cloudflare dashboard.
+2. Open **Storage & databases → D1 SQL Database**.
+3. Create a database named `bai-it-support-kpi-db`.
+4. Open the new database and copy its **Database ID**.
 
-Every push to `main` that changes `BAI-IT-Support-Cloudflare-Pages/**` or the deployment workflow starts **Deploy BAI IT Support to Cloudflare Workers**.
+### 2. Set the D1 ID in the repository
 
-The workflow:
-1. Validates the current frontend and Worker JavaScript.
-2. Validates the SQL migration in a temporary SQLite database.
-3. Finds the D1 database `bai-it-support-kpi-db`; creates it if it does not exist.
-4. Generates a deployment config with the real D1 database ID (the ID is not committed).
-5. Applies pending D1 migrations remotely.
-6. Deploys the Worker and the `public/` static assets.
-7. Calls `/api/health` and requires both Worker and D1 checks to pass.
+1. Open `BAI-IT-Support-Cloudflare-Pages/wrangler.worker.jsonc` on the `main` branch.
+2. Replace `__D1_DATABASE_ID__` with the Database ID copied from Cloudflare.
+3. Commit the change.
 
-If a step fails, open **GitHub → Actions → Deploy BAI IT Support to Cloudflare Workers**, select the failed run, and expand the failed step. The workflow uses explicit error messages so missing secrets, D1 provisioning, migration, deploy, and health-check failures can be distinguished.
+The ID is an identifier, not an API token. Never commit an API token or other credential.
 
-You can also start a run manually from the Actions tab using **Run workflow**.
+### 3. Connect Cloudflare Workers Builds to GitHub
 
-## Health endpoint
+1. In Cloudflare dashboard, open **Workers & Pages** and choose **Create application** / **Create Worker**.
+2. Choose the GitHub repository option and connect `NatasAngin/Ticketing-New`.
+3. Select branch `main`.
+4. Set the repository root / working directory to `BAI-IT-Support-Cloudflare-Pages`.
+5. Set the build/deploy command to:
+   `npx wrangler deploy --config wrangler.worker.jsonc`
+6. If the setup asks for a build command, use:
+   `npm install`
+7. Confirm the Worker name is `bai-it-support`, then deploy.
+
+Cloudflare's Git integration manages deployment authorization from your Cloudflare account. Do not add `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` to GitHub Secrets for this setup.
+
+### 4. Apply D1 migrations
+
+After the Worker is connected to the D1 database, apply the SQL migrations once from a terminal authenticated to your Cloudflare account, with the project directory as the working directory:
+
+```bash
+npx wrangler d1 migrations apply bai-it-support-kpi-db --remote --config wrangler.worker.jsonc
+```
+
+This step uses your own Cloudflare login via Wrangler, not a GitHub secret. Review the migration files before applying them.
+
+### 5. Verify
 
 Open:
 
-https://bai-it-support.sumarewbarbosa.workers.dev/api/health
+- App: https://bai-it-support.sumarewbarbosa.workers.dev/
+- Health check: https://bai-it-support.sumarewbarbosa.workers.dev/api/health
 
-A healthy response reports `ok: true`, `worker: true`, and `database: true`. A failed D1 query returns HTTP 503 and a diagnostic message.
+A healthy response should include `"ok": true`, `"worker": true`, and `"database": true`.
 
-## Current D1 migration scope
+## GitHub Actions
 
-The first migration creates the central tables for users, tickets, hold periods, comments, attachment metadata, ticket events, application settings, and audit logs.
+The workflow at `.github/workflows/deploy-cloudflare.yml` is now validation-only. It checks frontend/Worker JavaScript and the D1 migration SQL. It does not deploy and does not require repository secrets.
 
-**Important:** this establishes the database and a health-check endpoint. The existing browser application still uses localStorage/IndexedDB for its operational data. Its login, ticket CRUD, discussions, and attachment flows have not yet been migrated to authenticated Worker API endpoints. Do not treat the D1 schema alone as proof that existing browser data is synchronized or centrally secured. That application migration is the next development phase. Attachment file bytes will require a separate object-storage decision (for example, R2); D1 stores metadata only.
+## Important application status
 
-## Deployment configuration
+The Worker contains the authenticated API and the D1 schema. The health endpoint verifies that the Worker can query the expected D1 tables. Do not assume existing browser-local data has been synchronized into D1 unless the app's API migration and data flows have been tested end to end.
 
-- `wrangler.worker.jsonc` is the Worker + static assets + D1 configuration template.
-- The workflow writes the real D1 ID into a temporary generated config at runtime.
-- The existing `wrangler.toml` is retained for reference to the previous Pages setup; production GitHub Actions uses `wrangler.worker.jsonc`.
+Attachments currently store metadata in D1. This setup does not use Cloudflare R2.
