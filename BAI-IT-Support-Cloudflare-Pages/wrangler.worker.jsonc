@@ -9,12 +9,6 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
   },
-  "r2_buckets": [
-    {
-      "binding": "ATTACHMENTS",
-      "bucket_name": "bai-it-support-attachments"
-    }
-  ],
   "d1_databases": [
     {
       "binding": "DB",
