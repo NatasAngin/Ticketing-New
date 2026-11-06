@@ -46,9 +46,11 @@ async function api(r,env){
   const isAdmin=admin(current),validStatus=["Baru","Diproses","Hold","Selesai","Ditolak"],validPriority=["Critical","High","Medium","Low"];
   for(const t of d.tickets){
    if(!t||typeof t.id!=="string"||!t.id||typeof t.title!=="string"||!t.title.trim()||!validPriority.includes(t.priority)||!validStatus.includes(t.status))return json({ok:false,error:"Terdapat tiket dengan data wajib tidak valid."},400);
-   if(!isAdmin&&(t.ownerId&&t.ownerId!==current.id||t.status!=="Baru"))return json({ok:false,error:"User hanya dapat membuat tiket baru miliknya sendiri."},403);
+   if(!isAdmin&&t.ownerId&&t.ownerId!==current.id)return json({ok:false,error:"User hanya dapat membuat tiket miliknya sendiri."},403);
    const existing=await env.DB.prepare("SELECT owner_id FROM tickets WHERE id=?").bind(t.id).first();
    if(existing&&(!isAdmin&&existing.owner_id!==current.id))return json({ok:false,error:"Akses tiket ditolak."},403);
+   if(existing&&!isAdmin)continue;
+   if(!existing&&!isAdmin&&t.status!=="Baru")return json({ok:false,error:"User hanya dapat membuat tiket baru."},403);
    const owner=isAdmin?(t.ownerId||current.id):current.id,assigned=isAdmin?(t.assignedAccountId||null):null;
    await env.DB.prepare("INSERT INTO tickets(id,title,requester,department,category,priority,status,pic,owner_id,assigned_user_id,sla_hours,description,rejection_reason,hold_reason,created_at,resolved_at,rejected_at,assignment_mode,assigned_by,assigned_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now')) ON CONFLICT(id) DO UPDATE SET title=excluded.title,requester=excluded.requester,department=excluded.department,category=excluded.category,priority=excluded.priority,status=excluded.status,pic=excluded.pic,owner_id=excluded.owner_id,assigned_user_id=excluded.assigned_user_id,sla_hours=excluded.sla_hours,description=excluded.description,rejection_reason=excluded.rejection_reason,hold_reason=excluded.hold_reason,created_at=excluded.created_at,resolved_at=excluded.resolved_at,rejected_at=excluded.rejected_at,assignment_mode=excluded.assignment_mode,assigned_by=excluded.assigned_by,assigned_at=excluded.assigned_at,updated_at=excluded.updated_at")
     .bind(t.id,t.title.trim(),String(t.requester||""),String(t.department||""),String(t.category||""),t.priority,isAdmin?t.status:"Baru",String(t.pic||""),owner,assigned,Number(t.sla)||24,String(t.notes||""),String(t.rejectionReason||""),String(t.holdReason||""),t.created||new Date().toISOString(),t.resolved||null,isAdmin?(t.rejectedAt||null):null,isAdmin?(t.assignmentMode||"legacy"):"auto",isAdmin?(t.assignedBy||null):null,isAdmin?(t.assignedAt||null):null).run();
@@ -56,7 +58,9 @@ async function api(r,env){
    if(isAdmin&&Array.isArray(t.holdPeriods))for(const period of t.holdPeriods.slice(0,100)){if(!period?.start)continue;await env.DB.prepare("INSERT INTO ticket_hold_periods(id,ticket_id,started_at,ended_at) VALUES(?,?,?,?)").bind(crypto.randomUUID(),t.id,period.start,period.end||null).run()}
   }
   if(isAdmin){
-   const entries=[["categories",Array.isArray(d.categories)?d.categories:[]],["pics",Array.isArray(d.pics)?d.pics:[]],["target",Math.max(1,Math.min(100,Number(d.target)||95))],["demo",!!d.demo]];
+   const oldTarget=await env.DB.prepare("SELECT setting_value FROM app_settings WHERE setting_key='target'").first();
+   const targetValue=superAdmin(current)?Math.max(1,Math.min(100,Number(d.target)||95)):(oldTarget?JSON.parse(oldTarget.setting_value):95);
+   const entries=[["categories",Array.isArray(d.categories)?d.categories:[]],["pics",Array.isArray(d.pics)?d.pics:[]],["target",targetValue],["demo",!!d.demo]];
    for(const [key,value] of entries)await env.DB.prepare("INSERT INTO app_settings(setting_key,setting_value,updated_at) VALUES(?,?,strftime('%Y-%m-%dT%H:%M:%fZ','now')) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(key,JSON.stringify(value)).run();
   }
   return json({ok:true,saved:d.tickets.length});
