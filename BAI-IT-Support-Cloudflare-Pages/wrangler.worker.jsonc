@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "bai-it-support-kpi-db",
-      "database_id": "__D1_DATABASE_ID__",
+      "database_id": "62a40aac-0c11-4b89-ae94-13bc0f460c71",
       "migrations_dir": "./migrations"
     }
   ]
