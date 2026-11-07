@@ -3,7 +3,8 @@ const COOKIE="bai_it_session",enc=new TextEncoder();
 const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
 const randomHex=(n=32)=>hex(crypto.getRandomValues(new Uint8Array(n)));
 const digest=async s=>hex(await crypto.subtle.digest("SHA-256",enc.encode(s)));
-async function passHash(password,salt){const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:Uint8Array.from(salt.match(/.{2}/g),x=>parseInt(x,16)),iterations:210000,hash:"SHA-256"},key,256))}
+const PASSWORD_ITERATIONS=100000;
+async function passHash(password,salt){const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:Uint8Array.from(salt.match(/.{2}/g),x=>parseInt(x,16)),iterations:PASSWORD_ITERATIONS,hash:"SHA-256"},key,256))}
 const cookie=(token,age=604800)=>COOKIE+"="+encodeURIComponent(token)+"; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age="+age;
 const getCookie=r=>{const s=r.headers.get("Cookie")||"",m=s.split(";").map(x=>x.trim()).find(x=>x.startsWith(COOKIE+"="));return m?decodeURIComponent(m.slice(COOKIE.length+1)):""};
 async function body(r){try{const x=await r.json();return x&&typeof x==="object"&&!Array.isArray(x)?x:null}catch{return null}}
