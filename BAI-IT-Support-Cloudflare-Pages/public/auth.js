@@ -24,7 +24,7 @@ async function bootAuth(){
  try{
   const status=await authApi("/api/auth/status"),setup=!!status.setup_required;
   document.getElementById("auth-title").textContent=setup?"Buat Super Admin Pertama":"Login BAI IT Support";
-  document.getElementById("auth-description").textContent=setup?"Buat akun Super Admin atas nama Trisnardi Boesyanto untuk mengelola seluruh akses.":"Masuk untuk mengakses layanan IT Support PT Borneo Alumina Indonesia.";
+  document.getElementById("auth-description").textContent=setup?"Buat akun Super Admin pertama untuk mengelola seluruh akses.":"Masuk untuk mengakses layanan IT Support PT Borneo Alumina Indonesia.";
   document.getElementById("setup-name-field").classList.toggle("hidden",!setup);
   form.elements.fullName.required=setup;form.elements.password.minLength=setup?12:1;
   form.elements.password.autocomplete=setup?"new-password":"current-password";
@@ -42,7 +42,7 @@ document.getElementById("login-form").onsubmit=async e=>{
   const status=await authApi("/api/auth/status");
   let data;
   if(status.setup_required){
-   const fullName=f.elements.fullName.value.trim();if(fullName.replace(/\s+/g," ").toLowerCase()!=="trisnardi boesyanto")throw Error("Super Admin pertama harus menggunakan nama Trisnardi Boesyanto.");
+   const fullName=f.elements.fullName.value.trim();if(!fullName)throw Error("Nama lengkap wajib diisi.");
    if(password.length<12)throw Error("Password Super Admin minimal 12 karakter.");
    data=await authApi("/api/auth/setup",{method:"POST",body:JSON.stringify({fullName,username,password})});
   }else data=await authApi("/api/auth/login",{method:"POST",body:JSON.stringify({username,password})});
