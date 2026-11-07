@@ -24,7 +24,26 @@ async function api(r,env){
  if(p.startsWith("/api/")&&["POST","PUT","PATCH","DELETE"].includes(m)){const origin=r.headers.get("Origin");if(origin&&new URL(origin).host!==u.host)return json({ok:false,error:"Origin tidak diizinkan."},403)}
  if(p==="/api/health"&&m==="GET"){try{const q=await env.DB.prepare("SELECT 1 AS ok").first(),s=await env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('users','tickets','sessions','ticket_comments','ticket_attachments','ticket_events','app_settings','audit_logs','ticket_hold_periods','auth_login_attempts')").first();const ready=q?.ok===1&&s?.n===10;return json({ok:ready,service:"BAI IT Support API",worker:true,database:q?.ok===1,schema_ready:s?.n===10,checked_at:new Date().toISOString()},ready?200:503)}catch(e){return json({ok:false,worker:true,database:false,error:"Database unavailable."},503)}}
  if(p==="/api/auth/status"&&m==="GET"){const q=await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role='super_admin' AND is_active=1").first();return json({ok:true,setup_required:!q?.n})}
- if(p==="/api/auth/setup"&&m==="POST"){const d=await body(r);if(!d||typeof d.fullName!=="string"||!validUser(d.username)||typeof d.password!=="string"||d.password.length<12)return json({ok:false,error:"Nama, username valid, dan password minimal 12 karakter wajib diisi."},400);const exists=await env.DB.prepare("SELECT id FROM users WHERE role='super_admin' AND is_active=1 LIMIT 1").first();if(exists)return json({ok:false,error:"Super Admin sudah terdaftar. Silakan login."},409);const salt=randomHex(16),hash=await passHash(d.password,salt),id=crypto.randomUUID();try{await env.DB.prepare("INSERT INTO users(id,full_name,username,password_hash,role) VALUES(?,?,?,?, 'super_admin')").bind(id,d.fullName.trim(),d.username.trim().toLowerCase(),salt+":"+hash).run()}catch(e){return json({ok:false,error:"Akun tidak dapat dibuat. Pastikan username belum digunakan."},409)}const t=await newSession(id,env);await audit(env,id,"create","user",id,{role:"super_admin"});return json({ok:true,user:{id,name:d.fullName.trim(),username:d.username.trim().toLowerCase(),role:"superadmin"}},201,{"set-cookie":cookie(t)})}
+ if(p==="/api/auth/setup"&&m==="POST"){
+  const d=await body(r);
+  if(!d||typeof d.fullName!=="string"||!d.fullName.trim()||!validUser(d.username)||typeof d.password!=="string"||d.password.length<12)return json({ok:false,error:"Nama, username valid, dan password minimal 12 karakter wajib diisi."},400);
+  const exists=await env.DB.prepare("SELECT id FROM users WHERE role='super_admin' AND is_active=1 LIMIT 1").first();
+  if(exists)return json({ok:false,error:"Super Admin sudah terdaftar. Silakan login."},409);
+  const salt=randomHex(16),hash=await passHash(d.password,salt),id=crypto.randomUUID(),username=d.username.trim().toLowerCase(),fullName=d.fullName.trim();
+  try{await env.DB.prepare("INSERT INTO users(id,full_name,username,password_hash,role) VALUES(?,?,?,?, 'super_admin')").bind(id,fullName,username,salt+":"+hash).run()}
+  catch(e){
+   console.error("Super Admin setup insert failed:",e);
+   const duplicate=await env.DB.prepare("SELECT id FROM users WHERE username=? COLLATE NOCASE").bind(username).first().catch(()=>null);
+   if(duplicate)return json({ok:false,error:"Username sudah digunakan. Silakan gunakan username lain."},409);
+   return json({ok:false,error:"Akun Super Admin gagal disimpan ke database. Silakan coba kembali."},500);
+  }
+  let t;
+  try{t=await newSession(id,env)}
+  catch(e){console.error("Super Admin session creation failed:",e);return json({ok:false,error:"Akun Super Admin sudah berhasil dibuat, tetapi sesi login gagal dibuat. Silakan kembali ke halaman login dan masuk menggunakan akun tersebut."},500)}
+  try{await audit(env,id,"create","user",id,{role:"super_admin"})}
+  catch(e){console.error("Super Admin audit event failed:",e)}
+  return json({ok:true,user:{id,name:fullName,username,role:"superadmin"}},201,{"set-cookie":cookie(t)});
+ }
  if(p==="/api/auth/login"&&m==="POST"){const d=await body(r);if(!d||!validUser(d.username)||typeof d.password!=="string")return json({ok:false,error:"Username dan password wajib diisi."},400);const username=d.username.trim().toLowerCase(),ipHash=await digest(r.headers.get("CF-Connecting-IP")||"unknown"),state=await loginAttemptState(env,username,ipHash);if(state.blocked)return json({ok:false,error:"Terlalu banyak percobaan login. Coba kembali dalam 15 menit."},429);const a=await env.DB.prepare("SELECT id,full_name AS name,username,role,password_hash FROM users WHERE username=? COLLATE NOCASE AND is_active=1").bind(username).first();if(!a||!a.password_hash?.includes(":")){await recordFailedLogin(env,username,ipHash,state.row);return json({ok:false,error:"Username atau password salah."},401)}const [salt,want]=a.password_hash.split(":");if(await passHash(d.password,salt)!==want){const blocked=await recordFailedLogin(env,username,ipHash,state.row);return json({ok:false,error:blocked?"Terlalu banyak percobaan login. Coba kembali dalam 15 menit.":"Username atau password salah."},blocked?429:401)}await env.DB.prepare("DELETE FROM auth_login_attempts WHERE username_key=? AND ip_hash=?").bind(username,ipHash).run();const t=await newSession(a.id,env);await audit(env,a.id,"login","session",null);return json({ok:true,user:{id:a.id,name:a.name,username:a.username,role:roleOut(a.role)}},200,{"set-cookie":cookie(t)})}
  if(p==="/api/auth/me"&&m==="GET"){const a=await session(r,env);return a?json({ok:true,user:{...a,role:roleOut(a.role)}}):json({ok:false,error:"Sesi tidak ditemukan atau telah berakhir."},401)}
  if(p==="/api/auth/logout"&&m==="POST"){const t=getCookie(r);if(t)await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(t)).run();return json({ok:true},200,{"set-cookie":cookie("",0)})}
@@ -93,4 +112,4 @@ async function api(r,env){
  if(p.startsWith("/api/"))return json({ok:false,error:"Endpoint API belum tersedia."},404);
  return env.ASSETS.fetch(r)
 }
-export default {async fetch(request,env){try{return await api(request,env)}catch(e){return json({ok:false,error:"Terjadi kesalahan pada layanan.",detail:""},500)}}};
+export default {async fetch(request,env){try{return await api(request,env)}catch(e){const requestId=crypto.randomUUID();console.error("Unhandled Worker request error:",{requestId,path:new URL(request.url).pathname,method:request.method,error:e?.stack||String(e)});return json({ok:false,error:"Terjadi kesalahan pada layanan.",requestId},500)}}};
