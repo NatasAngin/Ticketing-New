@@ -121,7 +121,7 @@ jobs:
           }
           const binding = config.d1_databases.find(item => item.binding === 'DB');
           binding.database_id = database.uuid;
-          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\\n');
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
           console.log('D1 database terverifikasi:', database.name);
           NODE
 
