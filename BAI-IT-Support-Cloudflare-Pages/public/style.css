@@ -530,3 +530,16 @@ tbody tr:hover{background:hsl(var(--nx-cycle-hue) 75% 55% / .055)}
 .login-card{border-color:hsl(var(--nx-cycle-hue) 65% 65% / .38);box-shadow:0 30px 90px rgba(0,0,0,.42),0 0 48px hsl(var(--nx-cycle-hue) 95% 60% / .14)}
 .login-card::before{background:linear-gradient(90deg,transparent,var(--nx-cyan),var(--nx-blue),var(--nx-violet),transparent)}
 @media(prefers-reduced-motion:reduce){:root{animation:none;--nx-cycle-hue:188deg}}
+
+/* Official BAI brand asset */
+.brand{align-items:center;gap:12px;min-width:0}
+.brand .brand-logo{display:block;width:76px;height:auto;max-height:48px;object-fit:contain;flex:0 0 auto}
+.brand>span{font-size:20px;line-height:1.15}
+.brand small{font-size:8px;letter-spacing:1.15px;white-space:nowrap}
+.login-logo{display:block;width:150px;height:auto;max-height:90px;object-fit:contain;margin:0 auto 18px;filter:drop-shadow(0 0 18px hsl(var(--nx-cycle-hue) 90% 60% / .18))}
+@media(max-width:700px){.brand .brand-logo{width:58px;max-height:40px}.brand>span{font-size:17px}}
+
+/* Official BAI logo */
+.brand-logo{display:block;width:58px;height:48px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 0 12px rgba(0,210,160,.22))}
+.login-logo{display:block;width:170px;height:auto;max-height:104px;object-fit:contain;margin:0 auto 18px;filter:drop-shadow(0 8px 22px rgba(255,115,0,.18))}
+@media(max-width:760px){.brand-logo{width:48px;height:40px}.login-logo{width:145px}}
