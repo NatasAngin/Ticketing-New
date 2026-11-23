@@ -406,3 +406,127 @@ dialog form input,dialog form select,dialog form textarea{display:block;width:10
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* =========================================================
+   NEXUS CHROMA ENGINE — continuously shifting neon palette
+   Colors cycle automatically; no JS, storage, or API changes.
+   ========================================================= */
+@property --nx-cycle-hue {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 188deg;
+}
+@keyframes nxColorCycle {
+  0%{--nx-cycle-hue:188deg}
+  16%{--nx-cycle-hue:252deg}
+  33%{--nx-cycle-hue:310deg}
+  50%{--nx-cycle-hue:355deg}
+  66%{--nx-cycle-hue:72deg}
+  83%{--nx-cycle-hue:145deg}
+  100%{--nx-cycle-hue:188deg}
+}
+:root{
+  animation:nxColorCycle 42s linear infinite;
+  --nx-cyan:hsl(var(--nx-cycle-hue) 94% 67%);
+  --nx-blue:hsl(calc(var(--nx-cycle-hue) + 48deg) 92% 68%);
+  --nx-violet:hsl(calc(var(--nx-cycle-hue) + 112deg) 91% 72%);
+  --nx-green:hsl(calc(var(--nx-cycle-hue) - 48deg) 78% 65%);
+  --nx-amber:hsl(calc(var(--nx-cycle-hue) + 165deg) 94% 72%);
+  --nx-red:hsl(calc(var(--nx-cycle-hue) + 205deg) 90% 72%);
+  --nx-line:hsl(var(--nx-cycle-hue) 55% 55% / .22);
+  --nx-glow:0 0 34px hsl(var(--nx-cycle-hue) 95% 60% / .17);
+}
+body{
+  background:
+    radial-gradient(ellipse at 82% 7%,hsl(calc(var(--nx-cycle-hue) + 105deg) 80% 48% / .22),transparent 34%),
+    radial-gradient(ellipse at 16% 38%,hsl(var(--nx-cycle-hue) 85% 48% / .18),transparent 36%),
+    radial-gradient(ellipse at 72% 88%,hsl(calc(var(--nx-cycle-hue) + 205deg) 85% 48% / .12),transparent 32%),
+    linear-gradient(135deg,#070b18 0%,#0a1021 48%,#080d1b 100%);
+  background-attachment:fixed;
+}
+body::before{filter:hue-rotate(calc(var(--nx-cycle-hue) - 188deg));opacity:.58}
+aside{
+  border-right-color:hsl(var(--nx-cycle-hue) 70% 65% / .28);
+  box-shadow:12px 0 45px rgba(0,0,0,.2),inset -1px 0 hsl(var(--nx-cycle-hue) 80% 70% / .09);
+}
+aside::before{
+  background:linear-gradient(90deg,transparent,var(--nx-cyan),var(--nx-blue),var(--nx-violet),transparent);
+  background-size:220% 100%;animation:nxHue 7s linear infinite;
+}
+.brand .bai-mark{
+  color:#071421;
+  border-color:hsl(var(--nx-cycle-hue) 100% 82% / .85);
+  background:linear-gradient(135deg,var(--nx-cyan),var(--nx-blue) 52%,var(--nx-violet));
+  box-shadow:0 0 30px hsl(var(--nx-cycle-hue) 95% 60% / .35);
+}
+.nav.active{
+  border-color:hsl(var(--nx-cycle-hue) 85% 70% / .35);
+  background:linear-gradient(100deg,hsl(var(--nx-cycle-hue) 85% 55% / .2),hsl(calc(var(--nx-cycle-hue) + 100deg) 80% 60% / .14));
+  box-shadow:inset 3px 0 var(--nx-cyan),0 0 25px hsl(var(--nx-cycle-hue) 90% 60% / .1);
+}
+header{
+  border-bottom-color:hsl(var(--nx-cycle-hue) 60% 60% / .23);
+  box-shadow:0 8px 35px hsl(var(--nx-cycle-hue) 85% 40% / .06);
+}
+header i,.badge{
+  color:var(--nx-cyan);
+  border-color:hsl(var(--nx-cycle-hue) 85% 70% / .35);
+  background:hsl(var(--nx-cycle-hue) 85% 55% / .1);
+}
+.eyebrow,#wib-clock{color:var(--nx-cyan);text-shadow:0 0 18px hsl(var(--nx-cycle-hue) 95% 60% / .32)}
+.card,.panel{
+  border-color:hsl(var(--nx-cycle-hue) 58% 60% / .23);
+  box-shadow:0 12px 32px rgba(0,0,0,.16),inset 0 1px hsl(var(--nx-cycle-hue) 90% 85% / .07);
+}
+.card::before,.panel::before{
+  background:linear-gradient(90deg,transparent,var(--nx-cyan),var(--nx-blue),var(--nx-violet),transparent);
+  background-size:220% 100%;animation:nxHue 11s linear infinite;
+}
+.card:hover{
+  border-color:hsl(var(--nx-cycle-hue) 90% 72% / .52);
+  box-shadow:0 18px 40px rgba(0,0,0,.25),0 0 32px hsl(var(--nx-cycle-hue) 90% 60% / .16);
+}
+.card-top span:last-child{
+  color:var(--nx-green);
+  background:hsl(calc(var(--nx-cycle-hue) - 48deg) 75% 48% / .12);
+  border-color:hsl(calc(var(--nx-cycle-hue) - 48deg) 75% 65% / .23);
+}
+.card strong{ text-shadow:0 0 24px hsl(var(--nx-cycle-hue) 90% 65% / .22)}
+button.primary{
+  border-color:hsl(var(--nx-cycle-hue) 100% 82% / .8);
+  background:linear-gradient(110deg,var(--nx-cyan),var(--nx-blue) 55%,var(--nx-violet));
+  background-size:220% 100%;
+  box-shadow:0 0 28px hsl(var(--nx-cycle-hue) 95% 60% / .28),inset 0 1px rgba(255,255,255,.45);
+  animation:nxPrimaryFlow 8s ease-in-out infinite;
+}
+@keyframes nxPrimaryFlow{
+  0%,100%{background-position:0% 50%;filter:saturate(1)}
+  50%{background-position:100% 50%;filter:saturate(1.35)}
+}
+button.primary:hover:not(:disabled){box-shadow:0 0 36px hsl(var(--nx-cycle-hue) 95% 60% / .42)}
+button:hover:not(:disabled){border-color:hsl(var(--nx-cycle-hue) 90% 72% / .62)}
+.tab.active{color:var(--nx-cyan);border-bottom-color:var(--nx-cyan);text-shadow:0 0 18px hsl(var(--nx-cycle-hue) 95% 60% / .35)}
+.donut{
+  background:conic-gradient(from -90deg,var(--nx-cyan),var(--nx-blue),var(--nx-violet),hsl(var(--nx-cycle-hue) 30% 24%) 92%);
+  box-shadow:0 0 36px hsl(var(--nx-cycle-hue) 95% 60% / .2);
+}
+.track{background:hsl(var(--nx-cycle-hue) 35% 45% / .18)}
+.fill{background:linear-gradient(90deg,var(--nx-cyan),var(--nx-blue),var(--nx-violet));box-shadow:0 0 17px hsl(var(--nx-cycle-hue) 95% 60% / .35)}
+input:focus,select:focus,textarea:focus{
+  border-color:hsl(var(--nx-cycle-hue) 95% 72% / .8);
+  box-shadow:0 0 0 3px hsl(var(--nx-cycle-hue) 95% 60% / .12),0 0 22px hsl(var(--nx-cycle-hue) 95% 60% / .12);
+}
+td{border-bottom-color:hsl(var(--nx-cycle-hue) 45% 55% / .13)}
+tbody tr:hover{background:hsl(var(--nx-cycle-hue) 75% 55% / .055)}
+.ticket-groups button.active{
+  color:var(--nx-cyan);background:hsl(var(--nx-cycle-hue) 85% 55% / .13);
+  border-color:hsl(var(--nx-cycle-hue) 90% 70% / .4);
+}
+#toast{
+  border-color:hsl(var(--nx-cycle-hue) 90% 70% / .5);
+  box-shadow:0 10px 35px rgba(0,0,0,.3),0 0 28px hsl(var(--nx-cycle-hue) 95% 60% / .18);
+}
+.login-card{border-color:hsl(var(--nx-cycle-hue) 65% 65% / .38);box-shadow:0 30px 90px rgba(0,0,0,.42),0 0 48px hsl(var(--nx-cycle-hue) 95% 60% / .14)}
+.login-card::before{background:linear-gradient(90deg,transparent,var(--nx-cyan),var(--nx-blue),var(--nx-violet),transparent)}
+@media(prefers-reduced-motion:reduce){:root{animation:none;--nx-cycle-hue:188deg}}
