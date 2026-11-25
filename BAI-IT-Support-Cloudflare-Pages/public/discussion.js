@@ -16,11 +16,11 @@ function writeDiscussionMessage(db,message,actorId){return new Promise((resolve,
  try{discussionAccess(message.ticketId);if(activeUser.id!==actorId)throw Error('Sesi akun berubah. Buka kembali diskusi.');const tx=db.transaction('messages','readwrite');tx.objectStore('messages').add(message);tx.oncomplete=()=>resolve(message);tx.onerror=tx.onabort=()=>reject(Error('Pesan atau lampiran gagal disimpan. Periksa ruang penyimpanan browser.'))}catch(error){reject(error)}
 })}
 async function validateChatFile(file){
- const extension=String(file.name||'').split('.').pop().toLowerCase();if(!['pdf','jpg','jpeg'].includes(extension))throw Error('Lampiran hanya boleh PDF atau JPG.');
+ const extension=String(file.name||'').split('.').pop().toLowerCase();if(!['pdf','jpg','jpeg','png'].includes(extension))throw Error('Lampiran hanya boleh PDF, JPG, JPEG, atau PNG.');
  if(!file.size||file.size>10*1024*1024)throw Error('Setiap file harus berisi data dan maksimal 10 MB.');
- const bytes=new Uint8Array(await file.slice(0,5).arrayBuffer()),pdf=bytes.length>=5&&String.fromCharCode(...bytes)==='%PDF-',jpg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;
- if(extension==='pdf'&&!pdf||['jpg','jpeg'].includes(extension)&&!jpg)throw Error('Isi file '+file.name+' tidak cocok dengan format PDF/JPG.');
- const safeName=file.name.replace(/[\\/\x00-\x1f]/g,'_').slice(0,180);return{id:crypto.randomUUID(),name:safeName,size:file.size,type:pdf?'application/pdf':'image/jpeg',blob:file.slice(0,file.size,pdf?'application/pdf':'image/jpeg')};
+ const bytes=new Uint8Array(await file.slice(0,8).arrayBuffer()),pdf=bytes.length>=5&&String.fromCharCode(...bytes.slice(0,5))==='%PDF-',jpg=bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255,png=bytes.length>=8&&bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71&&bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10;
+ if(extension==='pdf'&&!pdf||['jpg','jpeg'].includes(extension)&&!jpg||extension==='png'&&!png)throw Error('Isi file '+file.name+' tidak cocok dengan format PDF/JPG/PNG.');
+ const safeName=file.name.replace(/[\\/\x00-\x1f]/g,'_').slice(0,180);const mime=pdf?'application/pdf':jpg?'image/jpeg':'image/png';return{id:crypto.randomUUID(),name:safeName,size:file.size,type:mime,blob:file.slice(0,file.size,mime)};
 }
 async function sendDiscussionMessage(ticketId,text,files=[],replyTo=null){
  discussionAccess(ticketId);const actorId=activeUser.id,body=String(text||'').trim();
