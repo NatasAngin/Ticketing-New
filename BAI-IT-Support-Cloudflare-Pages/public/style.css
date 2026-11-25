@@ -543,3 +543,10 @@ tbody tr:hover{background:hsl(var(--nx-cycle-hue) 75% 55% / .055)}
 .brand-logo{display:block;width:58px;height:48px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 0 12px rgba(0,210,160,.22))}
 .login-logo{display:block;width:170px;height:auto;max-height:104px;object-fit:contain;margin:0 auto 18px;filter:drop-shadow(0 8px 22px rgba(255,115,0,.18))}
 @media(max-width:760px){.brand-logo{width:48px;height:40px}.login-logo{width:145px}}
+
+/* Align SLA priority legend markers and labels */
+.sla-policy{align-items:center;column-gap:24px;row-gap:10px}
+.sla-policy>b{display:inline-flex;align-items:center;white-space:nowrap}
+.sla-policy>span{display:inline-flex;align-items:center;gap:0;min-height:18px;white-space:nowrap;line-height:1.2}
+.sla-policy .dot{display:inline-block;flex:0 0 8px;width:8px;height:8px;min-width:8px;padding:0;margin:0 8px 0 0;border-radius:50%;vertical-align:middle}
+.sla-policy strong{display:inline-block;margin-left:8px;line-height:1.2}
